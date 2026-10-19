@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Atelier Vidéo IA</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f0f13">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        :root {
+            --bg: #0f0f13; --panel: #1a1a22; --border: #2e2e3e;
+            --ink: #e8e8f0; --ink-dim: #8888a0; --accent: #e94560;
+            --success: #2d8a4e; --error: #c0392b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+            background: var(--bg); color: var(--ink); margin: 0;
+            padding: 1.5rem 1rem 6rem; font-size: 15px; line-height: 1.5;
+            max-width: 900px; margin: 0 auto;
+            -webkit-tap-highlight-color: transparent;
+        }
+        h1 { font-size: 1.6rem; text-align: center; margin-bottom: 0.5rem;
+             background: linear-gradient(135deg, #e94560, #4a6cf7);
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+        .section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; margin-bottom: 1rem; }
+        .section h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim); margin-bottom: 0.8rem; }
+        input, textarea, select {
+            width: 100%; padding: 0.85rem; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--ink); font-family: inherit; font-size: 0.9rem;
+            box-sizing: border-box; margin-bottom: 0.6rem;
+        }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+        .btn { width: 100%; padding: 1rem; border-radius: 8px; border: none; font-weight: 700; font-size: 1rem; cursor: pointer; margin-bottom: 0.6rem; }
+        .btn-primary { background: linear-gradient(135deg, #e94560, #4a6cf7); color: #fff; }
+        .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-stop { background: transparent; border: 1px solid var(--error); color: var(--error); display: none; }
+        .btn-stop.visible { display: block; }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; }
+        .upload-zone input[type="file"] { display: none; }
+        .images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem; margin-top: 1rem; }
+        .image-card { aspect-ratio: 9/16; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); position: relative; }
+        .image-card img { width: 100%; height: 100%; object-fit: cover; }
+        .image-card .remove { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .video-card { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #000; }
+        .video-card video { width: 100%; display: block; }
+        .video-card .caption { padding: 0.5rem; font-size: 0.75rem; background: var(--panel); }
+        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--border); padding: 0.8rem; text-align: center; font-size: 0.8rem; transform: translateY(100%); transition: transform 0.3s; }
+        .status-bar.visible { transform: translateY(0); }
+        .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--panel); border: 1px solid var(--border); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.85rem; transition: transform 0.3s; z-index: 1000; }
+        .toast.visible { transform: translateX(-50%) translateY(0); }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+    </style>
+</head>
+<body>
+    <h1>Atelier Vidéo IA</h1>
+    <p class="subtitle">Transformez vos photos en vidéos animées</p>
+
+    <div class="section">
+        <h2>1. Clé API Agnes</h2>
+        <input type="password" id="api-key" placeholder="sk-...">
+        <button class="btn btn-primary" id="save-key-btn" style="margin-top:0.5rem;">Enregistrer la clé</button>
+        <div id="api-status" style="font-size:0.75rem; color:var(--ink-dim); margin-top:0.5rem;">Aucune clé enregistrée</div>
+    </div>
+
+    <div class="section">
+        <h2>2. Vos photos</h2>
+        <div class="upload-zone" id="upload-zone">
+            <input type="file" id="file-input" accept="image/*" multiple>
+            <div style="font-size:2rem; opacity:0.5;">＋</div>
+            <div>Appuyez pour ajouter des photos</div>
+        </div>
+        <div class="images-grid" id="images-grid"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Instructions & Effet</h2>
+        <textarea id="main-prompt" placeholder="Ex: Anime doucement cette image. Un vent léger fait bouger les cheveux. Lumière chaude et dorée. Garde le sujet identique." rows="3"></textarea>
+        <select id="effect-select" style="margin-top:0.5rem;">
+            <option value="">Aucun effet (utiliser seulement le prompt)</option>
+            <option value="cinematic">🎬 Cinématique</option>
+            <option value="ghibli">🌿 Studio Ghibli</option>
+            <option value="cyberpunk">🌃 Cyberpunk</option>
+        </select>
+        <select id="duration-select" style="margin-top:0.5rem;">
+            <option value="121">5 secondes</option>
+            <option value="153" selected>6,4 secondes</option>
+            <option value="241">10 secondes</option>
+        </select>
+    </div>
+
+    <button class="btn btn-primary" id="generate-btn" disabled>🎬 Générer les vidéos</button>
+    <button class="btn btn-stop" id="stop-btn">⏹ Arrêter</button>
+
+    <div class="section">
+        <h2>Vidéos générées</h2>
+        <div class="gallery" id="gallery"></div>
+    </div>
+
+    <div class="status-bar" id="status-bar">Prêt.</div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION AGNES
+        // ============================================================
+        const API_BASE = 'https://apihub.agnes-ai.com/v1';
+        const POLL_BASE = 'https://apihub.agnes-ai.com/agnesapi';
+        const MODEL_VIDEO = 'agnes-video-v2.0';
+        const FRAME_RATE = 24;
+        const CREATE_INTERVAL_MS = 62000;
+        const INITIAL_WAIT_SECONDS = 105;
+        const POLL_INTERVAL_SECONDS = 5;
+        const SAFETY_MARGIN = 1.10;
+
+        // ============================================================
+        // ÉTAT
+        // ============================================================
+        const state = {
+            images: [],
+            isRunning: false,
+            stopRequested: false,
+            videos: [],
+            durationFrames: 153,
+            apiKey: '',
+            mainPrompt: '',
+            selectedEffect: ''
+        };
+
+        // ============================================================
+        // UTILS
+        // ============================================================
+        const $ = id => document.getElementById(id);
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function showToast(msg, type = 'success') {
+            const t = $('toast');
+            t.textContent = msg;
+            t.className = `toast ${type} visible`;
+            setTimeout(() => t.classList.remove('visible'), 3000);
+        }
+
+        function setStatus(text) {
+            const bar = $('status-bar');
+            if (text) { bar.textContent = text; bar.classList.add('visible'); }
+            else bar.classList.remove('visible');
+        }
+
+        // ============================================================
+        // GESTION CLÉ API
+        // ============================================================
+        function loadApiKey() {
+            try {
+                state.apiKey = localStorage.getItem('agnes_api_key') || '';
+                if (state.apiKey) {
+                    $('api-key').value = state.apiKey;
+                    $('api-status').textContent = 'Clé active · ' + state.apiKey.slice(0, 8) + '…' + state.apiKey.slice(-4);
+                    $('api-status').style.color = 'var(--success)';
+                }
+            } catch (e) {}
+            updateGenerateBtn();
+        }
+
+        function saveApiKey() {
+            const key = $('api-key').value.trim();
+            if (!key) {
+                localStorage.removeItem('agnes_api_key');
+                state.apiKey = '';
+                $('api-status').textContent = 'Aucune clé enregistrée';
+                $('api-status').style.color = 'var(--ink-dim)';
+                showToast('Clé supprimée', 'warn');
+            } else {
+                localStorage.setItem('agnes_api_key', key);
+                state.apiKey = key;
+                $('api-status').textContent = 'Clé active · ' + key.slice(0, 8) + '…' + key.slice(-4);
+                $('api-status').style.color = 'var(--success)';
+                showToast('Clé enregistrée ✓', 'success');
+            }
+            updateGenerateBtn();
+        }
+
+        // ============================================================
+        // GESTION IMAGES
+        // ============================================================
+        function handleFiles(files) {
+            const list = Array.from(files).filter(f => f.type.startsWith('image/'));
+            if (!list.length) return;
+            list.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    state.images.push({
+                        id: Date.now() + Math.random(),
+                        dataUri: e.target.result,
+                        name: file.name
+                    });
+                    renderImages();
+                    updateGenerateBtn();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderImages() {
+            const grid = $('images-grid');
+            grid.innerHTML = state.images.map(img =>
+                `<div class="image-card">
+                    <img src="${img.dataUri}" alt="">
+                    <button class="remove" data-remove="${img.id}">✕</button>
+                </div>`
+            ).join('');
+            grid.querySelectorAll('[data-remove]').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    state.images = state.images.filter(x => String(x.id) !== btn.dataset.remove);
+                    renderImages();
+                    updateGenerateBtn();
+                });
+            });
+        }
+
+        // ============================================================
+        // CONSTRUCTION DU PROMPT
+        // ============================================================
+        function buildPrompt() {
+            const parts = [
+                'Animate this exact image as the starting frame.',
+                'The subject must remain IDENTICAL: same face, expression, clothing, pose, identity.',
+                'This is a CONTINUATION of the source image, not a re-imagination.',
+                'Preserve the exact composition and framing.',
+                'Portrait orientation 9:16 vertical, 24fps, no text, no watermarks.'
+            ];
+            if (state.selectedEffect === 'cinematic') parts.push('cinematic film look, dramatic lighting, subtle film grain, shallow depth of field.');
+            if (state.selectedEffect === 'ghibli') parts.push('Studio Ghibli anime style, Hayao Miyazaki aesthetic, hand-painted watercolor backgrounds.');
+            if (state.selectedEffect === 'cyberpunk') parts.push('cyberpunk futuristic aesthetic, neon pink and cyan lighting, Blade Runner atmosphere.');
+            if (state.mainPrompt.trim()) parts.push('Artistic direction: ' + state.mainPrompt.trim());
+            return parts.join(' ');
+        }
+
+        // ============================================================
+        // API AGNES
+        // ============================================================
+        async function apiFetch(url, options, label = 'API') {
+            for (let attempt = 0; attempt < 7; attempt++) {
+                if (state.stopRequested) throw new Error('Arrêt demandé');
+                try {
+                    const res = await fetch(url, options);
+                    if (res.status === 429) {
+                        const wait = [15, 30, 45, 60, 90, 120, 180][Math.min(attempt, 6)];
+                        setStatus(`Limite API — attente ${wait}s`);
+                        await sleep(wait * 1000);
+                        continue;
+                    }
+                    if (res.status === 503) {
+                        const wait = [5, 10, 15, 20, 30, 45][Math.min(attempt, 5)];
+                        setStatus(`Service occupé — attente ${wait}s`);
+                        await sleep(wait * 1000);
+                        continue;
+                    }
+                    return res;
+                } catch (e) {
+                    if (e.message === 'Arrêt demandé') throw e;
+                    const wait = [3, 5, 8, 12, 20, 30][Math.min(attempt, 5)];
+                    setStatus(`Connexion instable — retry dans ${wait}s`);
+                    await sleep(wait * 1000);
+                }
+            }
+            return fetch(url, options);
+        }
+
+        async function createVideoTask(item) {
+            const body = {
+                model: MODEL_VIDEO,
+                prompt: buildPrompt(),
+                image: item.image.dataUri,
+                num_frames: state.durationFrames,
+                frame_rate: FRAME_RATE
+            };
+            const res = await apiFetch(API_BASE + '/videos', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + state.apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            }, 'Création');
+            if (!res.ok) {
+                const err = await res.text();
+                throw new Error(`HTTP ${res.status} — ${err.slice(0, 200)}`);
+            }
+            const data = await res.json();
+            const videoId = data.video_id || data.id || data.task_id;
+            if (!videoId) throw new Error('Pas de video_id retourné');
+            return videoId;
+        }
+
+        async function pollVideo(videoId, onProgress) {
+            let remaining = INITIAL_WAIT_SECONDS;
+            while (remaining > 0) {
+                if (state.stopRequested) throw new Error('Arrêt demandé');
+                onProgress(`Préparation… ${remaining}s`);
+                await sleep(1000);
+                remaining--;
+            }
+            for (let attempt = 0; attempt < 100; attempt++) {
+                if (state.stopRequested) throw new Error('Arrêt demandé');
+                if (attempt > 0) {
+                    let r = POLL_INTERVAL_SECONDS;
+                    while (r > 0) {
+                        if (state.stopRequested) throw new Error('Arrêt demandé');
+                        onProgress(`Création… ${r}s`);
+                        await sleep(1000);
+                        r--;
+                    }
+                }
+                const url = POLL_BASE + '?video_id=' + encodeURIComponent(videoId) + '&model_name=' + encodeURIComponent(MODEL_VIDEO);
+                const res = await apiFetch(url, { headers: { 'Authorization': 'Bearer ' + state.apiKey } }, 'Polling');
+                const d = await res.json();
+                const status = d.status || 'unknown';
+                const progress = d.progress || 0;
+                onProgress(`Création… ${progress}%`);
+                if (status === 'completed' || status === 'succeeded' || status === 'done') {
+                    const videoUrl = (d.metadata && d.metadata.url) || d.url || (d.output && d.output.url);
+                    if (!videoUrl) throw new Error('Terminé mais pas d\'URL');
+                    return videoUrl;
+                }
+                if (status === 'failed' || status === 'error' || status === 'cancelled') {
+                    throw new Error(`Échec (${status})`);
+                }
+            }
+            throw new Error('Délai maximal dépassé');
+        }
+
+        // ============================================================
+        // PIPELINE PRINCIPAL
+        // ============================================================
+        async function startGeneration() {
+            if (state.isRunning || !state.images.length) return;
+            if (!state.apiKey) { showToast('Ajoutez une clé API', 'error'); return; }
+
+            state.isRunning = true;
+            state.stopRequested = false;
+            state.videos = [];
+            $('gallery').innerHTML = '';
+            $('generate-btn').disabled = true;
+            $('stop-btn').classList.add('visible');
+
+            const total = state.images.length;
+            const videoPromises = [];
+
+            for (let i = 0; i < total; i++) {
+                if (state.stopRequested) break;
+                const item = { image: state.images[i], index: i, status: 'pending' };
+
+                // Création de la carte vidéo en attente
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.id = `video-${i}`;
+                card.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#888; font-size:0.8rem; padding:1rem; text-align:center;">En attente…</div>`;
+                $('gallery').appendChild(card);
+
+                // Création de la tâche
+                try {
+                    const videoId = await createVideoTask(item);
+                    item.videoId = videoId;
+                    item.status = 'processing';
+
+                    // Lancement du polling en arrière-plan
+                    videoPromises.push(
+                        pollVideo(videoId, (prog) => {
+                            const el = document.getElementById(`video-${i}`);
+                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#e94560; font-size:0.8rem; padding:1rem; text-align:center;">${prog}</div>`;
+                        }).then(url => {
+                            item.videoUrl = url;
+                            item.status = 'done';
+                            const el = document.getElementById(`video-${i}`);
+                            if (el) {
+                                el.innerHTML = `<video src="${url}" controls playsinline></video><div class="caption">Scène ${i + 1}</div>`;
+                            }
+                            showToast(`Vidéo ${i + 1} prête !`, 'success');
+                        }).catch(e => {
+                            item.status = 'failed';
+                            const el = document.getElementById(`video-${i}`);
+                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--error); font-size:0.8rem; padding:1rem; text-align:center;">Échec</div>`;
+                        })
+                    );
+                } catch (e) {
+                    item.status = 'failed';
+                    showToast(`Erreur création ${i + 1}: ${e.message}`, 'error');
+                }
+
+                // Espacement entre les créations
+                if (i < total - 1 && !state.stopRequested) {
+                    for (let r = 62; r > 0; r--) {
+                        if (state.stopRequested) break;
+                        setStatus(`Prochaine tâche dans ${r}s`);
+                        await sleep(1000);
+                    }
+                }
+            }
+
+            // Attente de toutes les vidéos
+            if (videoPromises.length) {
+                setStatus('Finalisation des vidéos…');
+                await Promise.allSettled(videoPromises);
+            }
+
+            state.isRunning = false;
+            state.stopRequested = false;
+            $('generate-btn').disabled = false;
+            $('stop-btn').classList.remove('visible');
+            setStatus(null);
+            showToast('Génération terminée', 'success');
+        }
+
+        function stopGeneration() {
+            if (!state.isRunning) return;
+            state.stopRequested = true;
+            setStatus('Arrêt en cours…');
+        }
+
+        function updateGenerateBtn() {
+            const btn = $('generate-btn');
+            const hasKey = !!state.apiKey;
+            const hasImages = state.images.length > 0;
+            btn.disabled = !hasKey || !hasImages || state.isRunning;
+            if (state.isRunning) btn.textContent = 'Génération en cours…';
+            else if (!hasKey) btn.textContent = 'Ajoutez votre clé API';
+            else if (!hasImages) btn.textContent = 'Ajoutez des photos';
+            else btn.textContent = `🎬 Générer ${state.images.length} vidéo${state.images.length > 1 ? 's' : ''}`;
+        }
+
+        // ============================================================
+        // INITIALISATION
+        // ============================================================
+        function init() {
+            // Remplir les champs depuis le state
+            $('duration-select').value = state.durationFrames;
+
+            // Événements
+            $('save-key-btn').addEventListener('click', saveApiKey);
+            $('api-key').addEventListener('keydown', e => { if (e.key === 'Enter') saveApiKey(); });
+
+            $('upload-zone').addEventListener('click', () => $('file-input').click());
+            $('file-input').addEventListener('change', e => {
+                handleFiles(e.target.files);
+                e.target.value = '';
+            });
+
+            $('main-prompt').addEventListener('input', e => { state.mainPrompt = e.target.value; });
+            $('effect-select').addEventListener('change', e => { state.selectedEffect = e.target.value; });
+            $('duration-select').addEventListener('change', e => { state.durationFrames = parseInt(e.target.value, 10); });
+
+            $('generate-btn').addEventListener('click', startGeneration);
+            $('stop-btn').addEventListener('click', stopGeneration);
+
+            // Charger la clé API
+            loadApiKey();
+
+            // Enregistrer le Service Worker pour la PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
