@@ -55,6 +55,18 @@
         .toast.visible { transform: translateX(-50%) translateY(0); }
         .toast.success { border-color: var(--success); }
         .toast.error { border-color: var(--error); }
+            .video-actions { padding: 10px; background: var(--panel); border-top: 1px solid var(--border); text-align: center; }
+        .btn-save {
+            display: inline-block; padding: 12px 20px; background: var(--accent);
+            color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;
+            font-size: 0.95rem; box-shadow: 0 4px 10px rgba(233,69,96,0.3);
+           el.innerHTML = `
+    <video src="${url}" controls playsinline></video>
+    <div class="video-actions">
+        <a href="${url}" target="_blank" class="btn-save">📥 Enregistrer dans Photos</a>
+    </div>
+    <div class="caption">Scène ${i + 1}</div>
+`;
     </style>
 </head>
 <body>
