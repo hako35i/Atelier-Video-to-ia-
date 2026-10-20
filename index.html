@@ -50,7 +50,6 @@
         .video-card video { width: 100%; display: block; }
         .video-card .caption { padding: 0.5rem; font-size: 0.75rem; background: var(--panel); text-align: center;}
         
-        /* --- BOUTON DE SAUVEGARDE --- */
         .video-actions { padding: 12px; background: var(--panel); border-top: 1px solid var(--border); text-align: center; }
         .btn-save {
             display: inline-block; width: 100%; box-sizing: border-box; padding: 12px 20px; 
@@ -90,17 +89,14 @@
 
     <div class="section">
         <h2>3. Instructions & Effet</h2>
-        <textarea id="main-prompt" placeholder="Ex: Anime doucement cette image. Un vent léger fait bouger les cheveux. Lumière chaude et dorée. Garde le sujet identique." rows="3"></textarea>
+        <textarea id="main-prompt" placeholder="Ex: Anime doucement cette image. Un vent léger fait bouger les cheveux." rows="3"></textarea>
         <select id="effect-select" style="margin-top:0.5rem;">
-            <option value="">Aucun effet (utiliser seulement le prompt)</option>
+            <option value="">Aucun effet</option>
             <option value="cinematic">🎬 Cinématique</option>
-            <option value="ghibli">🌿 Studio Ghibli</option>
-            <option value="cyberpunk">🌃 Cyberpunk</option>
         </select>
         <select id="duration-select" style="margin-top:0.5rem;">
             <option value="121">5 secondes</option>
             <option value="153" selected>6,4 secondes</option>
-            <option value="241">10 secondes</option>
         </select>
     </div>
 
@@ -116,9 +112,6 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        // ============================================================
-        // CONFIGURATION AGNES
-        // ============================================================
         const API_BASE = 'https://apihub.agnes-ai.com/v1';
         const POLL_BASE = 'https://apihub.agnes-ai.com/agnesapi';
         const MODEL_VIDEO = 'agnes-video-v2.0';
@@ -126,23 +119,11 @@
         const INITIAL_WAIT_SECONDS = 105;
         const POLL_INTERVAL_SECONDS = 5;
 
-        // ============================================================
-        // ÉTAT
-        // ============================================================
         const state = {
-            images: [],
-            isRunning: false,
-            stopRequested: false,
-            videos: [],
-            durationFrames: 153,
-            apiKey: '',
-            mainPrompt: '',
-            selectedEffect: ''
+            images: [], isRunning: false, stopRequested: false,
+            durationFrames: 153, apiKey: '', mainPrompt: '', selectedEffect: ''
         };
 
-        // ============================================================
-        // UTILS
-        // ============================================================
         const $ = id => document.getElementById(id);
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -150,7 +131,7 @@
             const t = $('toast');
             t.textContent = msg;
             t.className = `toast ${type} visible`;
-            setTimeout(() => t.classList.remove('visible'), 3000);
+            setTimeout(() => t.classList.remove('visible'), 4000);
         }
 
         function setStatus(text) {
@@ -159,15 +140,12 @@
             else bar.classList.remove('visible');
         }
 
-        // ============================================================
-        // GESTION CLÉ API
-        // ============================================================
         function loadApiKey() {
             try {
                 state.apiKey = localStorage.getItem('agnes_api_key') || '';
                 if (state.apiKey) {
                     $('api-key').value = state.apiKey;
-                    $('api-status').textContent = 'Clé active · ' + state.apiKey.slice(0, 8) + '…' + state.apiKey.slice(-4);
+                    $('api-status').textContent = 'Clé active';
                     $('api-status').style.color = 'var(--success)';
                 }
             } catch (e) {}
@@ -177,37 +155,22 @@
         function saveApiKey() {
             const key = $('api-key').value.trim();
             if (!key) {
-                localStorage.removeItem('agnes_api_key');
-                state.apiKey = '';
-                $('api-status').textContent = 'Aucune clé enregistrée';
-                $('api-status').style.color = 'var(--ink-dim)';
+                localStorage.removeItem('agnes_api_key'); state.apiKey = '';
                 showToast('Clé supprimée', 'warn');
             } else {
-                localStorage.setItem('agnes_api_key', key);
-                state.apiKey = key;
-                $('api-status').textContent = 'Clé active · ' + key.slice(0, 8) + '…' + key.slice(-4);
-                $('api-status').style.color = 'var(--success)';
+                localStorage.setItem('agnes_api_key', key); state.apiKey = key;
                 showToast('Clé enregistrée ✓', 'success');
             }
-            updateGenerateBtn();
+            loadApiKey();
         }
 
-        // ============================================================
-        // GESTION IMAGES
-        // ============================================================
         function handleFiles(files) {
-            const list = Array.from(files).filter(f => f.type.startsWith('image/'));
-            if (!list.length) return;
-            list.forEach(file => {
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
                 const reader = new FileReader();
                 reader.onload = e => {
-                    state.images.push({
-                        id: Date.now() + Math.random(),
-                        dataUri: e.target.result,
-                        name: file.name
-                    });
+                    state.images.push({ id: Date.now() + Math.random(), dataUri: e.target.result });
                     renderImages();
-                    updateGenerateBtn();
                 };
                 reader.readAsDataURL(file);
             });
@@ -216,295 +179,178 @@
         function renderImages() {
             const grid = $('images-grid');
             grid.innerHTML = state.images.map(img =>
-                `<div class="image-card">
-                    <img src="${img.dataUri}" alt="">
-                    <button class="remove" data-remove="${img.id}">✕</button>
-                </div>`
+                `<div class="image-card"><img src="${img.dataUri}"><button class="remove" data-remove="${img.id}">✕</button></div>`
             ).join('');
             grid.querySelectorAll('[data-remove]').forEach(btn => {
-                btn.addEventListener('click', e => {
+                btn.onclick = (e) => {
                     e.stopPropagation();
                     state.images = state.images.filter(x => String(x.id) !== btn.dataset.remove);
-                    renderImages();
-                    updateGenerateBtn();
-                });
+                    renderImages(); updateGenerateBtn();
+                };
             });
+            updateGenerateBtn();
         }
 
-        // ============================================================
-        // CONSTRUCTION DU PROMPT
-        // ============================================================
         function buildPrompt() {
-            const parts = [
+            let parts = [
                 'Animate this exact image as the starting frame.',
-                'The subject must remain IDENTICAL: same face, expression, clothing, pose, identity.',
-                'This is a CONTINUATION of the source image, not a re-imagination.',
-                'Preserve the exact composition and framing.',
-                'Portrait orientation 9:16 vertical, 24fps, no text, no watermarks.'
+                'The subject must remain IDENTICAL: same face, expression, clothing, pose.',
+                'Portrait orientation 9:16 vertical, 24fps.'
             ];
-            if (state.selectedEffect === 'cinematic') parts.push('cinematic film look, dramatic lighting, subtle film grain, shallow depth of field.');
-            if (state.selectedEffect === 'ghibli') parts.push('Studio Ghibli anime style, Hayao Miyazaki aesthetic, hand-painted watercolor backgrounds.');
-            if (state.selectedEffect === 'cyberpunk') parts.push('cyberpunk futuristic aesthetic, neon pink and cyan lighting, Blade Runner atmosphere.');
+            if (state.selectedEffect === 'cinematic') parts.push('cinematic film look, dramatic lighting.');
             if (state.mainPrompt.trim()) parts.push('Artistic direction: ' + state.mainPrompt.trim());
             return parts.join(' ');
         }
 
-        // ============================================================
-        // API AGNES
-        // ============================================================
-        async function apiFetch(url, options, label = 'API') {
-            for (let attempt = 0; attempt < 7; attempt++) {
+        async function apiFetch(url, options) {
+            for (let attempt = 0; attempt < 5; attempt++) {
                 if (state.stopRequested) throw new Error('Arrêt demandé');
                 try {
                     const res = await fetch(url, options);
-                    if (res.status === 429) {
-                        const wait = [15, 30, 45, 60, 90, 120, 180][Math.min(attempt, 6)];
-                        setStatus(`Limite API — attente ${wait}s`);
-                        await sleep(wait * 1000);
-                        continue;
-                    }
-                    if (res.status === 503) {
-                        const wait = [5, 10, 15, 20, 30, 45][Math.min(attempt, 5)];
-                        setStatus(`Service occupé — attente ${wait}s`);
-                        await sleep(wait * 1000);
-                        continue;
+                    if (res.status === 429 || res.status === 503) {
+                        let wait = 15;
+                        setStatus(`Serveur occupé, attente ${wait}s...`);
+                        await sleep(wait * 1000); continue;
                     }
                     return res;
                 } catch (e) {
                     if (e.message === 'Arrêt demandé') throw e;
-                    const wait = [3, 5, 8, 12, 20, 30][Math.min(attempt, 5)];
-                    setStatus(`Connexion instable — retry dans ${wait}s`);
-                    await sleep(wait * 1000);
+                    setStatus(`Connexion instable...`);
+                    await sleep(5000);
                 }
             }
             return fetch(url, options);
         }
 
         async function createVideoTask(item) {
-            const body = {
-                model: MODEL_VIDEO,
-                prompt: buildPrompt(),
-                image: item.image.dataUri,
-                num_frames: state.durationFrames,
-                frame_rate: FRAME_RATE
-            };
             const res = await apiFetch(API_BASE + '/videos', {
                 method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + state.apiKey,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            }, 'Création');
-            if (!res.ok) {
-                const err = await res.text();
-                throw new Error(`HTTP ${res.status} — ${err.slice(0, 200)}`);
-            }
+                headers: { 'Authorization': 'Bearer ' + state.apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: MODEL_VIDEO, prompt: buildPrompt(), image: item.image.dataUri,
+                    num_frames: state.durationFrames, frame_rate: FRAME_RATE
+                })
+            });
+            if (!res.ok) throw new Error(`Erreur création`);
             const data = await res.json();
-            const videoId = data.video_id || data.id || data.task_id;
-            if (!videoId) throw new Error('Pas de video_id retourné');
-            return videoId;
+            return data.video_id || data.id || data.task_id;
         }
 
         async function pollVideo(videoId, onProgress) {
             let remaining = INITIAL_WAIT_SECONDS;
             while (remaining > 0) {
-                if (state.stopRequested) throw new Error('Arrêt demandé');
-                onProgress(`Préparation… ${remaining}s`);
-                await sleep(1000);
-                remaining--;
+                if (state.stopRequested) throw new Error('Arrêt');
+                onProgress(`Attente initiale : ${remaining}s`); await sleep(1000); remaining--;
             }
             for (let attempt = 0; attempt < 100; attempt++) {
-                if (state.stopRequested) throw new Error('Arrêt demandé');
-                if (attempt > 0) {
-                    let r = POLL_INTERVAL_SECONDS;
-                    while (r > 0) {
-                        if (state.stopRequested) throw new Error('Arrêt demandé');
-                        onProgress(`Création… ${r}s`);
-                        await sleep(1000);
-                        r--;
-                    }
-                }
+                if (state.stopRequested) throw new Error('Arrêt');
                 const url = POLL_BASE + '?video_id=' + encodeURIComponent(videoId) + '&model_name=' + encodeURIComponent(MODEL_VIDEO);
-                const res = await apiFetch(url, { headers: { 'Authorization': 'Bearer ' + state.apiKey } }, 'Polling');
+                const res = await apiFetch(url, { headers: { 'Authorization': 'Bearer ' + state.apiKey } });
                 const d = await res.json();
                 const status = d.status || 'unknown';
-                const progress = d.progress || 0;
-                onProgress(`Création… ${progress}%`);
+                onProgress(`Statut : ${status}...`);
                 if (status === 'completed' || status === 'succeeded' || status === 'done') {
-                    const videoUrl = (d.metadata && d.metadata.url) || d.url || (d.output && d.output.url);
-                    if (!videoUrl) throw new Error('Terminé mais pas d\'URL');
-                    return videoUrl;
+                    return (d.metadata && d.metadata.url) || d.url || (d.output && d.output.url);
                 }
-                if (status === 'failed' || status === 'error' || status === 'cancelled') {
-                    throw new Error(`Échec (${status})`);
+                if (status === 'failed' || status === 'error') throw new Error('Échec génération');
+                for(let r = POLL_INTERVAL_SECONDS; r > 0; r--) {
+                    if (state.stopRequested) throw new Error('Arrêt');
+                    onProgress(`Création... ${r}s`); await sleep(1000);
                 }
             }
-            throw new Error('Délai maximal dépassé');
+            throw new Error('Timeout');
         }
 
-        // ============================================================
-        // PIPELINE PRINCIPAL
-        // ============================================================
         async function startGeneration() {
-            if (state.isRunning || !state.images.length) return;
-            if (!state.apiKey) { showToast('Ajoutez une clé API', 'error'); return; }
-
-            state.isRunning = true;
-            state.stopRequested = false;
-            state.videos = [];
+            if (state.isRunning || !state.images.length || !state.apiKey) return;
+            state.isRunning = true; state.stopRequested = false;
             $('gallery').innerHTML = '';
             $('generate-btn').disabled = true;
             $('stop-btn').classList.add('visible');
 
-            const total = state.images.length;
-            const videoPromises = [];
-
-            for (let i = 0; i < total; i++) {
+            for (let i = 0; i < state.images.length; i++) {
                 if (state.stopRequested) break;
-                const item = { image: state.images[i], index: i, status: 'pending' };
-
-                // Création de la carte vidéo en attente
+                
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 card.id = `video-${i}`;
-                card.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#888; font-size:0.8rem; padding:1rem; text-align:center;">En attente…</div>`;
+                card.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#888; padding:1rem; text-align:center;">En attente…</div>`;
                 $('gallery').appendChild(card);
 
-                // Création de la tâche
                 try {
-                    const videoId = await createVideoTask(item);
-                    item.videoId = videoId;
-                    item.status = 'processing';
+                    const videoId = await createVideoTask({ image: state.images[i] });
+                    
+                    pollVideo(videoId, (prog) => {
+                        const el = document.getElementById(`video-${i}`);
+                        if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#e94560; padding:1rem; text-align:center;">${prog}</div>`;
+                    }).then(url => {
+                        const el = document.getElementById(`video-${i}`);
+                        if (el) {
+                            el.innerHTML = ''; // On vide
 
-                    // Lancement du polling en arrière-plan
-                    videoPromises.push(
-                        pollVideo(videoId, (prog) => {
-                            const el = document.getElementById(`video-${i}`);
-                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:#e94560; font-size:0.8rem; padding:1rem; text-align:center;">${prog}</div>`;
-                        }).then(url => {
-                            item.videoUrl = url;
-                            item.status = 'done';
-                            const el = document.getElementById(`video-${i}`);
-                            
-                            // --- CORRECTION IOS : AFFICHAGE PROGRAMMATIQUE DE LA VIDÉO ---
-                            if (el) {
-                                el.innerHTML = ''; // On vide l'attente
+                            // 1. La vidéo (SANS crossOrigin pour éviter les bugs iOS)
+                            const videoEl = document.createElement('video');
+                            videoEl.src = url;
+                            videoEl.controls = true;
+                            videoEl.playsInline = true;
+                            videoEl.setAttribute('playsinline', ''); 
+                            videoEl.style.width = '100%';
+                            videoEl.style.display = 'block';
+                            el.appendChild(videoEl);
 
-                                // 1. Création de la vidéo
-                                const videoEl = document.createElement('video');
-                                videoEl.src = url;
-                                videoEl.controls = true;
-                                videoEl.playsInline = true;
-                                videoEl.setAttribute('playsinline', ''); 
-                                videoEl.crossOrigin = "anonymous"; // Crucial pour iOS
-                                videoEl.style.width = '100%';
-                                videoEl.style.display = 'block';
-                                videoEl.style.backgroundColor = '#000';
-                                el.appendChild(videoEl);
-
-                                // 2. Création du bouton de sauvegarde
-                                const actionsDiv = document.createElement('div');
-                                actionsDiv.className = 'video-actions';
-                                
-                                const saveBtn = document.createElement('a');
-                                saveBtn.href = url;
-                                saveBtn.target = '_blank';
-                                saveBtn.className = 'btn-save';
-                                saveBtn.textContent = '📥 Enregistrer dans Photos';
-                                
-                                actionsDiv.appendChild(saveBtn);
-                                el.appendChild(actionsDiv);
-
-                                // 3. Légende
-                                const captionDiv = document.createElement('div');
-                                captionDiv.className = 'caption';
-                                captionDiv.textContent = `Scène ${i + 1}`;
-                                el.appendChild(captionDiv);
-                            }
-                            showToast(`Vidéo ${i + 1} prête !`, 'success');
-                        }).catch(e => {
-                            item.status = 'failed';
-                            const el = document.getElementById(`video-${i}`);
-                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--error); font-size:0.8rem; padding:1rem; text-align:center;">Échec : ${e.message}</div>`;
-                        })
-                    );
+                            // 2. Le bouton
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'video-actions';
+                            const saveBtn = document.createElement('a');
+                            saveBtn.href = url;
+                            saveBtn.target = '_blank';
+                            saveBtn.className = 'btn-save';
+                            saveBtn.textContent = '📥 Enregistrer dans Photos';
+                            actionsDiv.appendChild(saveBtn);
+                            el.appendChild(actionsDiv);
+                        }
+                        showToast(`Vidéo ${i + 1} prête !`, 'success');
+                    }).catch(e => {
+                        const el = document.getElementById(`video-${i}`);
+                        if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--error); padding:1rem; text-align:center;">Échec : ${e.message}</div>`;
+                    });
                 } catch (e) {
-                    item.status = 'failed';
-                    showToast(`Erreur création ${i + 1}: ${e.message}`, 'error');
+                    showToast(`Erreur : ${e.message}`, 'error');
                 }
-
-                // Espacement entre les créations
-                if (i < total - 1 && !state.stopRequested) {
-                    for (let r = 62; r > 0; r--) {
+                
+                if (i < state.images.length - 1) {
+                    for (let r = 10; r > 0; r--) {
                         if (state.stopRequested) break;
-                        setStatus(`Prochaine tâche dans ${r}s`);
-                        await sleep(1000);
+                        setStatus(`Pause avant la photo suivante (${r}s)`); await sleep(1000);
                     }
                 }
             }
-
-            // Attente de toutes les vidéos
-            if (videoPromises.length) {
-                setStatus('Finalisation des vidéos…');
-                await Promise.allSettled(videoPromises);
-            }
-
             state.isRunning = false;
-            state.stopRequested = false;
             $('generate-btn').disabled = false;
             $('stop-btn').classList.remove('visible');
             setStatus(null);
-            showToast('Génération terminée', 'success');
-        }
-
-        function stopGeneration() {
-            if (!state.isRunning) return;
-            state.stopRequested = true;
-            setStatus('Arrêt en cours…');
         }
 
         function updateGenerateBtn() {
             const btn = $('generate-btn');
-            const hasKey = !!state.apiKey;
-            const hasImages = state.images.length > 0;
-            btn.disabled = !hasKey || !hasImages || state.isRunning;
+            btn.disabled = !state.apiKey || !state.images.length || state.isRunning;
             if (state.isRunning) btn.textContent = 'Génération en cours…';
-            else if (!hasKey) btn.textContent = 'Ajoutez votre clé API';
-            else if (!hasImages) btn.textContent = 'Ajoutez des photos';
-            else btn.textContent = `🎬 Générer ${state.images.length} vidéo${state.images.length > 1 ? 's' : ''}`;
+            else if (!state.apiKey) btn.textContent = 'Ajoutez votre clé API';
+            else if (!state.images.length) btn.textContent = 'Ajoutez des photos';
+            else btn.textContent = `🎬 Générer ${state.images.length} vidéo(s)`;
         }
 
-        // ============================================================
-        // INITIALISATION
-        // ============================================================
-        function init() {
-            $('duration-select').value = state.durationFrames;
-
-            $('save-key-btn').addEventListener('click', saveApiKey);
-            $('api-key').addEventListener('keydown', e => { if (e.key === 'Enter') saveApiKey(); });
-
-            $('upload-zone').addEventListener('click', () => $('file-input').click());
-            $('file-input').addEventListener('change', e => {
-                handleFiles(e.target.files);
-                e.target.value = '';
-            });
-
-            $('main-prompt').addEventListener('input', e => { state.mainPrompt = e.target.value; });
-            $('effect-select').addEventListener('change', e => { state.selectedEffect = e.target.value; });
-            $('duration-select').addEventListener('change', e => { state.durationFrames = parseInt(e.target.value, 10); });
-
-            $('generate-btn').addEventListener('click', startGeneration);
-            $('stop-btn').addEventListener('click', stopGeneration);
-
-            loadApiKey();
-
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js').catch(() => {});
-            }
-        }
-
-        init();
+        // Initialisation
+        $('save-key-btn').onclick = saveApiKey;
+        $('upload-zone').onclick = () => $('file-input').click();
+        $('file-input').onchange = e => { handleFiles(e.target.files); e.target.value = ''; };
+        $('main-prompt').oninput = e => state.mainPrompt = e.target.value;
+        $('effect-select').onchange = e => state.selectedEffect = e.target.value;
+        $('duration-select').onchange = e => state.durationFrames = parseInt(e.target.value);
+        $('generate-btn').onclick = startGeneration;
+        $('stop-btn').onclick = () => { state.stopRequested = true; setStatus('Arrêt...'); };
+        
+        loadApiKey();
     </script>
 </body>
 </html>
