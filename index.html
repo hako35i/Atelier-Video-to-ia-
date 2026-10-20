@@ -48,25 +48,23 @@
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
         .video-card { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #000; }
         .video-card video { width: 100%; display: block; }
-        .video-card .caption { padding: 0.5rem; font-size: 0.75rem; background: var(--panel); }
+        .video-card .caption { padding: 0.5rem; font-size: 0.75rem; background: var(--panel); text-align: center;}
+        
+        /* --- BOUTON DE SAUVEGARDE --- */
+        .video-actions { padding: 12px; background: var(--panel); border-top: 1px solid var(--border); text-align: center; }
+        .btn-save {
+            display: inline-block; width: 100%; box-sizing: border-box; padding: 12px 20px; 
+            background: var(--accent); color: #fff; text-decoration: none; 
+            border-radius: 8px; font-weight: bold; font-size: 0.95rem; 
+            box-shadow: 0 4px 10px rgba(233,69,96,0.3);
+        }
+
         .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--border); padding: 0.8rem; text-align: center; font-size: 0.8rem; transform: translateY(100%); transition: transform 0.3s; }
         .status-bar.visible { transform: translateY(0); }
         .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--panel); border: 1px solid var(--border); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.85rem; transition: transform 0.3s; z-index: 1000; }
         .toast.visible { transform: translateX(-50%) translateY(0); }
         .toast.success { border-color: var(--success); }
         .toast.error { border-color: var(--error); }
-            .video-actions { padding: 10px; background: var(--panel); border-top: 1px solid var(--border); text-align: center; }
-        .btn-save {
-            display: inline-block; padding: 12px 20px; background: var(--accent);
-            color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;
-            font-size: 0.95rem; box-shadow: 0 4px 10px rgba(233,69,96,0.3);
-           el.innerHTML = `
-    <video src="${url}" controls playsinline></video>
-    <div class="video-actions">
-        <a href="${url}" target="_blank" class="btn-save">📥 Enregistrer dans Photos</a>
-    </div>
-    <div class="caption">Scène ${i + 1}</div>
-`;
     </style>
 </head>
 <body>
@@ -125,10 +123,8 @@
         const POLL_BASE = 'https://apihub.agnes-ai.com/agnesapi';
         const MODEL_VIDEO = 'agnes-video-v2.0';
         const FRAME_RATE = 24;
-        const CREATE_INTERVAL_MS = 62000;
         const INITIAL_WAIT_SECONDS = 105;
         const POLL_INTERVAL_SECONDS = 5;
-        const SAFETY_MARGIN = 1.10;
 
         // ============================================================
         // ÉTAT
@@ -149,7 +145,6 @@
         // ============================================================
         const $ = id => document.getElementById(id);
         const sleep = ms => new Promise(r => setTimeout(r, ms));
-        const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
         function showToast(msg, type = 'success') {
             const t = $('toast');
@@ -391,14 +386,47 @@
                             item.videoUrl = url;
                             item.status = 'done';
                             const el = document.getElementById(`video-${i}`);
+                            
+                            // --- CORRECTION IOS : AFFICHAGE PROGRAMMATIQUE DE LA VIDÉO ---
                             if (el) {
-                                el.innerHTML = `<video src="${url}" controls playsinline></video><div class="caption">Scène ${i + 1}</div>`;
+                                el.innerHTML = ''; // On vide l'attente
+
+                                // 1. Création de la vidéo
+                                const videoEl = document.createElement('video');
+                                videoEl.src = url;
+                                videoEl.controls = true;
+                                videoEl.playsInline = true;
+                                videoEl.setAttribute('playsinline', ''); 
+                                videoEl.crossOrigin = "anonymous"; // Crucial pour iOS
+                                videoEl.style.width = '100%';
+                                videoEl.style.display = 'block';
+                                videoEl.style.backgroundColor = '#000';
+                                el.appendChild(videoEl);
+
+                                // 2. Création du bouton de sauvegarde
+                                const actionsDiv = document.createElement('div');
+                                actionsDiv.className = 'video-actions';
+                                
+                                const saveBtn = document.createElement('a');
+                                saveBtn.href = url;
+                                saveBtn.target = '_blank';
+                                saveBtn.className = 'btn-save';
+                                saveBtn.textContent = '📥 Enregistrer dans Photos';
+                                
+                                actionsDiv.appendChild(saveBtn);
+                                el.appendChild(actionsDiv);
+
+                                // 3. Légende
+                                const captionDiv = document.createElement('div');
+                                captionDiv.className = 'caption';
+                                captionDiv.textContent = `Scène ${i + 1}`;
+                                el.appendChild(captionDiv);
                             }
                             showToast(`Vidéo ${i + 1} prête !`, 'success');
                         }).catch(e => {
                             item.status = 'failed';
                             const el = document.getElementById(`video-${i}`);
-                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--error); font-size:0.8rem; padding:1rem; text-align:center;">Échec</div>`;
+                            if (el) el.innerHTML = `<div style="aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--error); font-size:0.8rem; padding:1rem; text-align:center;">Échec : ${e.message}</div>`;
                         })
                     );
                 } catch (e) {
@@ -451,10 +479,8 @@
         // INITIALISATION
         // ============================================================
         function init() {
-            // Remplir les champs depuis le state
             $('duration-select').value = state.durationFrames;
 
-            // Événements
             $('save-key-btn').addEventListener('click', saveApiKey);
             $('api-key').addEventListener('keydown', e => { if (e.key === 'Enter') saveApiKey(); });
 
@@ -471,10 +497,8 @@
             $('generate-btn').addEventListener('click', startGeneration);
             $('stop-btn').addEventListener('click', stopGeneration);
 
-            // Charger la clé API
             loadApiKey();
 
-            // Enregistrer le Service Worker pour la PWA
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('sw.js').catch(() => {});
             }
